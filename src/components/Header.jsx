@@ -39,11 +39,11 @@ export default function Header() {
             </li>
             <li
               className={`cursor-pointer py-3 text-sm font-semibold text-gray-500 border-b-[3px] border-b-transparent ${
-                pathMathRoute("/register") && "text-black border-b-red-500"
+                pathMathRoute("/login") && "text-black border-b-red-500"
               }`}
-              onClick={() => navigate("/register")}
+              onClick={() => navigate("/login")}
             >
-              Register
+              Login
             </li>
           </ul>
         </div>
