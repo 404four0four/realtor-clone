@@ -36,7 +36,6 @@ export default function Register() {
       delete formData.password;
       formDataCopy.timestamp = serverTimestamp();
       await setDoc(doc(db, "users", user.uid), formDataCopy);
-      toast.success('Registration was successful.');
       navigate('/');
     } catch (error) {
       toast.error("Something went wrong with the registration.")

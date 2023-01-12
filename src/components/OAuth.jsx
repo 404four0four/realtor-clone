@@ -25,7 +25,6 @@ export default function OAuth() {
                     timestamp: serverTimestamp(),
                 });
             }
-            toast.success('Registration was successful.');
             navigate('/');
         } catch (error) {
             console.error(error);
