@@ -1,8 +1,16 @@
 import React, { useState } from 'react'
+import { toast } from 'react-toastify';
+import { getAuth } from 'firebase/auth';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Spinner from '../components/Spinner'
+import { v4 as uuidv4 } from 'uuid';
+import { db } from "../firebase";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { useNavigate } from 'react-router-dom';
 
 export default function CreateListing() {
-    const [geolocationEnabled, setGeolocationEnabled] = useState(false);
+    const navigate = useNavigate();
+    const auth = getAuth();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         type: "rent",
@@ -18,8 +26,9 @@ export default function CreateListing() {
         discountedPrice: 0,
         latitude: 0,
         longitude: 0,
+        images: {},
     });
-    const { type, name, bedrooms, bathrooms, parking, furnished, address, description, offer, regularPrice, discountedPrice, latitude, longitude, } = formData;
+    const { type, name, bedrooms, bathrooms, parking, furnished, address, description, offer, regularPrice, discountedPrice, latitude, longitude, images } = formData;
     function onChange(e) {
         let boolean = null;
         if (e.target.value === "true") {
@@ -43,9 +52,72 @@ export default function CreateListing() {
             }));
         }
     }
-    function onSubmit(e) {
+    async function onSubmit(e) {
         e.preventDefault();
         setLoading(true);
+        if (+discountedPrice >= +regularPrice) {
+            setLoading(false);
+            toast.error('Discounted price needs be less than regular price.');
+            return;
+        }
+        if (images.length > 6) {
+            setLoading(false);
+            toast.error("Maximum 6 images are allowed to be uploaded.")
+            return;
+        }
+
+        async function storeImage(image) {
+            return new Promise((resolve, reject) => {
+                const storage = getStorage();
+                const filename = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`;
+                const storageRef = ref(storage, filename);
+                const uploadTask = uploadBytesResumable(storageRef, image);
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        console.log('Upload is ' + progress + '% done');
+                        switch (snapshot.state) {
+                            case 'paused':
+                                console.log('Upload is paused');
+                                break;
+                            case 'running':
+                                console.log('Upload is running');
+                                break;
+                        }
+                    },
+                    (error) => {
+                        reject(error)
+                    },
+                    () => {
+                        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                            resolve(downloadURL);
+                        });
+                    }
+                );
+
+
+            });
+        }
+
+        const imgUrls = await Promise.all(
+            [...images]
+                .map((image) => storeImage(image)))
+            .catch((error) => {
+                setLoading(false);
+                toast.error("Images not uploaded");
+                return;
+            });
+        const formDataCopy = {
+            ...formData,
+            imgUrls,
+            timestamp: serverTimestamp(),
+        }
+        delete formDataCopy.images;
+        !formDataCopy.offer && delete formDataCopy.discountedPrice;
+        const docRef = await addDoc(collection(db, "listings"), formDataCopy);
+        setLoading(false);
+        toast.success('Listing created.');
+        navigate(`/category/${formDataCopy.type}/${docRef.id}`);
     }
 
     if (loading) {
@@ -90,18 +162,16 @@ export default function CreateListing() {
                 </div>
                 <p className='text-lg mt-6 font-semibold'>Address</p>
                 <textarea type="text" id="address" value={address} onChange={onChange} placeholder="Address" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600 mb-6'></textarea>
-                {!geolocationEnabled && (
-                    <div className='mb-6 flex space-x-6'>
-                        <div>
-                            <p className='text-lg font-semibold'>Latitude</p>
-                            <input type="number" id="latitude" value={latitude} onChange={onChange} min="-90" max="90" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out duration-150 focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center' />
-                        </div>
-                        <div>
-                            <p className='text-lg font-semibold'>Longitude</p>
-                            <input type="number" id="longitude" value={longitude} onChange={onChange} min="-180" max="180" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out duration-150 focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center' />
-                        </div>
+                <div className='mb-6 flex space-x-6'>
+                    <div>
+                        <p className='text-lg font-semibold'>Latitude</p>
+                        <input type="number" id="latitude" value={latitude} onChange={onChange} min="-90" max="90" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out duration-150 focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center' />
                     </div>
-                )}
+                    <div>
+                        <p className='text-lg font-semibold'>Longitude</p>
+                        <input type="number" id="longitude" value={longitude} onChange={onChange} min="-180" max="180" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition ease-in-out duration-150 focus:text-gray-700 focus:bg-white focus:border-slate-600 text-center' />
+                    </div>
+                </div>
                 <p className='text-lg font-semibold'>Description</p>
                 <textarea type="text" id="description" value={description} onChange={onChange} placeholder="Description" required className='w-full px-4 py-2 text-xl text-gray-700 bg-white border border-gray-300 rounded transition duration-150 ease-in-out focus:text-gray-700 focus:bg-white focus:border-slate-600'></textarea>
                 <p className='text-lg mt-6 font-semibold'>Offer</p>
