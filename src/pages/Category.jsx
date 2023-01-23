@@ -85,7 +85,7 @@ export default function Category() {
                     )}
                 </>
             ) : (
-                <p>There are no current offers.</p>
+                <p>There is no current places for rent or sale.</p>
             )}
         </div >
     );
